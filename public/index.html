@@ -1,12 +1,111 @@
-{
-  "name": "cartex",
-  "version": "1.0.0",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.19.2",
-    "pg": "^8.11.5",
-    "cookie-parser": "^1.4.6"
-  }
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cartex</title>
+<style>
+:root{--bg:#070B18;--panel:#101733;--line:#252d55;--ivory:#F3EBDD;--muted:#9AA3C4;--up:#4ADE80;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ivory);font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
+.wrap{max-width:460px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 2px}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.bal{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-weight:700}
+.pack{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center;margin-bottom:16px}
+.pack p{margin:0 0 10px;color:var(--muted);font-size:13px}
+button{appearance:none;border:none;border-radius:10px;padding:11px 18px;font:700 14px inherit;cursor:pointer}
+.btn{background:#F2B84B;color:#0B1020}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.msg{min-height:18px;font-size:13px;color:var(--muted);margin-top:8px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.empty{color:var(--muted);font-size:13px;text-align:center;padding:20px 0}
+.reveal{display:flex;gap:10px;justify-content:center;margin-bottom:16px;flex-wrap:wrap}
+.pcard{position:relative;aspect-ratio:5/7;border-radius:12px;padding:2.5px;background:linear-gradient(150deg,var(--c1),var(--c2) 55%,var(--c1));box-shadow:0 0 var(--gs,10px) var(--glow),0 6px 14px rgba(0,0,0,.5)}
+.pcard.big{width:98px}
+.pface{position:relative;height:100%;border-radius:9.5px;background:radial-gradient(120% 80% at 50% 0%,#1a2352 0%,#0b1128 60%,#060914 100%);display:flex;flex-direction:column;align-items:center;justify-content:space-between;overflow:hidden;padding:6px 4px 5px}
+.pface .cat{font-size:8px;color:var(--c1);letter-spacing:.05em;font-weight:700;align-self:flex-start;padding-left:2px}
+.pface .ic{font-size:30px;line-height:1}
+.pcard.big .pface .ic{font-size:38px}
+.pface .nm{font-size:10.5px;font-weight:700;text-align:center;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}
+.pface .st{font-size:8px;color:var(--c1);letter-spacing:2px}
+.pface .st b{font-weight:400;opacity:.22}
+.pface .seal{font-size:7.5px;font-weight:700;color:var(--c1);border:1px solid var(--c2);border-radius:999px;padding:1.5px 7px}
+.pcard.r-legendaire .pface::after,.pcard.r-unique .pface::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.22) 48%,transparent 60%);background-size:220% 220%;animation:shim 3.2s linear infinite;pointer-events:none}
+.pcard.r-unique{background:linear-gradient(120deg,#ff6ec7,#ffd86e,#6effc1,#6ec7ff,#c76eff,#ff6ec7);background-size:300% 300%;animation:hs 6s linear infinite}
+@keyframes shim{0%{background-position:200% 0}100%{background-position:-40% 0}}
+@keyframes hs{0%{background-position:0% 50%}100%{background-position:300% 50%}}
+@media (prefers-reduced-motion:reduce){.pcard.r-unique,.pface::after{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><h1>Cartex</h1><span class="bal" id="bal">…</span></div>
+  <div class="pack">
+    <p>Pack standard — 3 cartes</p>
+    <button class="btn" id="openBtn" disabled>Ouvrir · 200</button>
+    <div class="msg" id="msg"></div>
+  </div>
+  <div class="reveal" id="reveal"></div>
+  <h2 style="font-size:15px;margin:0 0 8px">Ma collection</h2>
+  <div class="grid" id="grid"><p class="empty">Chargement…</p></div>
+</div>
+<script>
+var RARITY={
+ commune:{label:'Commune',c1:'#DCE0E8',c2:'#727B8D',stars:1,glow:'rgba(160,168,185,.15)'},
+ rare:{label:'Rare',c1:'#9CC7FF',c2:'#2358C4',stars:2,glow:'rgba(59,130,246,.35)',gs:'14px'},
+ epique:{label:'Épique',c1:'#F0ABFC',c2:'#7E22CE',stars:3,glow:'rgba(168,85,247,.4)',gs:'16px'},
+ legendaire:{label:'Légendaire',c1:'#FFE9A6',c2:'#B4711A',stars:4,glow:'rgba(245,185,66,.5)',gs:'20px'},
+ unique:{label:'Unique',c1:'#FFFFFF',c2:'#8AD8FF',stars:5,glow:'rgba(120,220,255,.5)',gs:'22px'}
+};
+var CATALOG={
+ monarque:{n:'Monarque',cat:'Insecte',ic:'🦋',r:'commune'},
+ renard:{n:'Renard roux',cat:'Animal',ic:'🦊',r:'commune'},
+ islande:{n:'Islande',cat:'Pays',ic:'🇮🇸',r:'rare'},
+ miura:{n:'Lamborghini Miura',cat:'Voiture',ic:'🏎️',r:'rare'},
+ andromede:{n:'Andromède',cat:'Espace',ic:'🌌',r:'epique'},
+ toutankh:{n:'Toutânkhamon',cat:'Histoire',ic:'𓋹',r:'epique'},
+ msm:{n:'Mont-Saint-Michel',cat:'Monument',ic:'🏰',r:'legendaire'},
+ eiffel:{n:'Tour Eiffel',cat:'Monument',ic:'🗼',r:'legendaire'}
+};
+var PACK_COST=200;
+var state=null;
+
+function cardHTML(id,big){
+  var c=CATALOG[id],r=RARITY[c.r],st='★'.repeat(r.stars)+'<b>'+'★'.repeat(5-r.stars)+'</b>';
+  return '<div class="pcard r-'+c.r+(big?' big':'')+'" style="--c1:'+r.c1+';--c2:'+r.c2+';--glow:'+r.glow+';--gs:'+(r.gs||'8px')+'">'+
+    '<div class="pface"><span class="cat">'+c.cat+'</span><span class="ic">'+c.ic+'</span>'+
+    '<span class="nm">'+c.n+'</span><span class="st">'+st+'</span><span class="seal">'+r.label+'</span></div></div>';
 }
+function renderBal(){document.getElementById('bal').textContent=state.balance+' Ticks';}
+function renderGrid(){
+  var g=document.getElementById('grid'),ids=Object.keys(state.collection||{});
+  if(!ids.length){g.innerHTML='<p class="empty">Aucune carte pour l\'instant — ouvre un pack.</p>';return;}
+  g.innerHTML=ids.map(function(id){ return cardHTML(id,false); }).join('');
+}
+function renderReveal(ids){
+  document.getElementById('reveal').innerHTML=ids.map(function(id){ return cardHTML(id,true); }).join('');
+}
+function updateBtn(){document.getElementById('openBtn').disabled=state.balance<PACK_COST;}
+
+async function openPack(){
+  document.getElementById('openBtn').disabled=true;
+  var res=await fetch('/api/pack',{method:'POST'});
+  var data=await res.json();
+  if(!res.ok){ document.getElementById('msg').textContent = data.error==='insufficient_funds' ? 'Pas assez de Ticks.' : 'Erreur.'; updateBtn(); return; }
+  state.balance=data.balance; state.collection=data.collection;
+  renderReveal(data.got); renderBal(); renderGrid(); updateBtn();
+  document.getElementById('msg').textContent='Pack ouvert !';
+}
+
+async function init(){
+  document.getElementById('openBtn').onclick=openPack;
+  var res=await fetch('/api/state');
+  state=await res.json();
+  renderBal(); renderGrid(); updateBtn();
+}
+init();
+</script>
+</body>
+</html>
